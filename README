@@ -10,8 +10,8 @@ I. Installation
 
   1. gmp with C++ extensions enabled
   2. PAPI
-  3. Chacha pseudorandom number generator (use the assembly for high
-  performance)
+  3. Chacha pseudorandom number generator (use the assembly version for
+  high performance)
   4. NTL with NTL_GMP_LIP=on 
   5. libconfig
   6. Cheetah template library
