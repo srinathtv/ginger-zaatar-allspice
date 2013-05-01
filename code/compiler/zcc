@@ -1,0 +1,291 @@
+#!/bin/bash
+
+#VM arguments for java
+javaargs=-Xmx30000M
+#Arguments for python environment
+pythonargs=
+
+
+verbose=1
+
+#When 0, adds "#include<stdinc.h>" to the top of every c file
+nostdinc=1
+path=
+build=
+targetdir=.
+bugginess=0.1
+windowsize=
+prefix=
+framework=
+inlining=m
+optimize=1
+metrics=0
+worksheetMode=1
+eliminateCommonSubexprs=0
+bigconstraints=1
+while [ $# -gt 0 ]
+do
+    case "$1" in
+        --no-build)  javac="--no-build";;
+	--no-inline)  inlining="";;
+	--no-opt)  optimize=0;;
+	--metrics)  metrics=1;;
+	--staticp)  worksheetMode=0;;
+	--ecs)  eliminateCommonSubexprs=1;;
+	--limcsize)  bigconstraints=0;;
+        -f)  path="$2"; shift;;
+	-b)  bugginess="$2"; shift;;
+	-d)  targetdir="$2"; shift;;
+	-w)  windowsize="$2"; shift;;
+	-t)  framework="$2"; shift;;
+	-prefix)  prefix="$2"; shift;;
+        --) shift; break;;
+        -*)
+	  echo -e >&2 \
+	  "usage: $0 [--no-build] {-f <sfdl file>} {-t <framework>} {-w <windowsize>} [--no-inline] [--metrics] [--staticp] [--ecs] [--limcsize] [-prefix <prefix>] [-d <dir>]\n" \
+	  "   --no-build : skip building of the frontend\n" \
+	  "   --no-inline : skip the expression inlining optimization (i.e. run in 'fairplay mode') \n" \
+	  "   --metrics	 : Output information about the size of the computation being compiled \n" \
+	  "   --staticp	 : Don't use a prover worksheet, rather compile the computation into the prover statically\n" \
+	  "   --ecs   	 : eliminate common subexpressions (WARNING: Huge memory usage) \n" \
+	  "   --limcsize : prevent compiler optimizations if they would increase constraint size \n" \
+	  "   -d	 : the destination root for output files\n" \
+	  "   -b	 : how buggy to make the buggy prover\n" \
+	  "   -w	 : size of compiler's optimization window (higher values increase memory use, -1 => infinite size window)\n" \
+	  "   -t	 : which framework to output to (GINGER or ZAATAR)\n" \
+	  "   -prefix    : filename prefix (may contain path separators) for all generated files \n" 
+	  exit 1;;
+	*)  break;; # terminate while loop
+    esac
+    shift
+done 
+
+if [ "$path" == "" ] || [ "$framework" == "" ]; then
+{
+	  echo -e >&2 \
+	  "usage: $0 [--no-build] {-f <sfdl file>} {-t <framework>} {-w <windowsize>} [--no-inline] [--metrics] [--staticp] [--ecs] [--limcsize] [-prefix <prefix>] [-d <dir>]\n" \
+	  "   --no-build : skip building of the frontend\n" \
+	  "   --no-inline : skip the expression inlining optimization (i.e. run in 'fairplay mode') \n" \
+	  "   --metrics	 : Output information about the size of the computation being compiled \n" \
+	  "   --staticp	 : Don't use a prover worksheet, rather compile the computation into the prover statically\n" \
+	  "   --ecs   	 : eliminate common subexpressions (WARNING: Huge memory usage) \n" \
+	  "   --limcsize : prevent compiler optimizations if they would increase constraint size \n" \
+	  "   -d	 : the destination root for output files\n" \
+	  "   -b	 : how buggy to make the buggy prover\n" \
+	  "   -w	 : size of compiler's optimization window (higher values increase memory use, -1 => infinite size window)\n" \
+	  "   -t	 : which framework to output to (GINGER or ZAATAR)\n" \
+	  "   -prefix    : filename prefix (may contain path separators) for all generated files \n" 
+    exit 1
+} fi
+
+
+if [ "$prefix" == "" ]; then
+{
+    prefix=$(basename "$path")
+    prefix="${prefix%.*}"
+} fi
+
+filename=$(basename "$path")
+classname="${filename%.*}" #todo - something fancier?
+extension="${filename##*.}"
+defsfile="$filename.defines"
+echo "" > "$defsfile"
+
+TIMER="/usr/bin/time -o tmptime -f"
+PRINT_TIME=
+
+# If the source file is a .c file, run the preprocessor on it first.
+if [ "$extension" == "c" ]; then
+{
+  # Standard includes (workaround for implicit int functions)
+  echo "" > "${filename}tmp.c"
+  if [ $nostdinc == 0 ]; then
+  {
+    echo "#include <stdinc.h>" >> "${filename}tmp.c"
+  } fi
+  cat "$path" >> "${filename}tmp.c"
+
+  gcc -nostdinc -undef -E -P -I cstdinc -o "$filename" "${filename}tmp.c"
+  if [ $? != 0 ]; then 
+  {
+    echo "Error in C preprocessor on $path"
+    exit 1 
+  } fi
+
+  # Collect the define statements so that we can autogenerate the .cons.h
+  # header for exogenous checking.
+  grep "#define" "$path" > "$defsfile"
+  path="$filename"
+} fi
+
+if [ $metrics == 1 ]; then
+{
+    echo -en "metric_num_lines_in_sfdl $classname "
+    grep -cve '^\s*$' "$path"
+    echo -en "metric_num_lines_in_source $classname "
+    grep -cve '^\s*$' "$path"
+
+    PRINT_TIME="cat tmptime"
+} fi
+
+compileropts=""
+if [ "$verbose" == "1" ]; then
+    compileropts+=" --verbose"
+fi
+if [ "$bigconstraints" == "1" ]; then
+    compileropts+=" --bigconstraints"
+fi
+compileropts+=" --seed=12345 "
+compileropts+=" -O$framework -B$windowsize"
+compileropts+=" --defs $defsfile"
+circuitFile="$filename.$framework.circuit"
+
+#Build the frontend
+if [ "$build" != "--no-build" ]; then
+    cd frontend
+    make
+    cd ..
+fi
+
+if [ $optimize != 0 ]; then
+{
+
+#Compile the raw source file, with expression combining of ifs (happens only here)
+#Also, we perform all type checking on this pass.
+$TIMER "metric_compile_1_utime $classname %U\nmetric_compile_1_stime $classname %S\n" java "$javaargs" -cp frontend/bin zcc.ZCC $compileropts ct${inlining}w "$path"
+
+if [ $? != 0 ]; then 
+{ 
+  exit 1 
+} fi
+
+$PRINT_TIME
+
+#Print the number of circuit wires in the unoptimized circuit
+echo -en "metric_compile_1_wires $classname "
+grep -cve '^\s*$' "${circuitFile}"
+
+#Second expression combining pass (more powerful with profiling information)
+mv -f "$circuitFile" "${circuitFile}2"
+#Perform profiling on the circuit
+$TIMER "metric_compile_tac2_utime $classname %U\nmetric_compile_tac2_stime $classname %S\n" perl -e 'print reverse <>' < "${circuitFile}2" > "${circuitFile}2.tac"
+
+$PRINT_TIME
+
+$TIMER "metric_compile_p2_utime $classname %U\nmetric_compile_p2_stime $classname %S\n" java "$javaargs" -cp frontend/bin zcc.ZCC $compileropts p "${circuitFile}2.tac"
+
+$PRINT_TIME
+
+$TIMER "metric_compile_untac2_utime $classname %U\nmetric_compile_untac2_stime $classname %S\n" perl -e 'print reverse <>' < "${circuitFile}2.tac.profile" > "${circuitFile}2.profile"
+
+$PRINT_TIME
+
+#Do optimization based on the .profile file
+$TIMER "metric_compile_2_utime $classname %U\nmetric_compile_2_stime $classname %S\n" java "$javaargs" -cp frontend/bin zcc.ZCC --profile ${circuitFile}2.profile ${circuitFile}2 $compileropts c${inlining}wfa "$path"
+
+if [ $? != 0 ]; then 
+{ 
+  exit 1 
+} fi
+
+$PRINT_TIME
+
+#Print the number of circuit wires in the optimized circuit (first optimization)
+echo -en "metric_compile_2_wires $classname "
+grep -cve '^\s*$' "${circuitFile}"
+
+
+#if [ $eliminateCommonSubexprs != 0 ]; then
+#{
+#Redundant code elimination doesn't scale. It requires holding the entire circuit in a content addressable database
+#  mv -f "$circuitFile" "${circuitFile}3"
+#  tac "${circuitFile}3" > "${circuitFile}3.tac"
+#  java "$javaargs" -cp frontend/bin zcc.ZCC --profile ${circuitFile}3 $compileropts rw "$path"
+#  if [ $? != 0 ]; then 
+#  { 
+#    exit 1 
+#  } fi
+#} fi
+
+if [ 1 == 0 ]; then
+{
+
+#One additional pass without optimization to remove fractions and output .spec files, plus a second pass of dead code elimination
+mv -f "$circuitFile" "${circuitFile}4"
+#Perform profiling on the circuit
+$TIMER "metric_compile_tac4_utime $classname %U\nmetric_compile_tac4_stime $classname %S\n" perl -e 'print reverse <>' < "${circuitFile}4" > "${circuitFile}4.tac"
+
+$PRINT_TIME
+$TIMER "metric_compile_p4_utime $classname %U\nmetric_compile_p4_stime $classname %S\n" java "$javaargs" -cp frontend/bin zcc.ZCC $compileropts p ${circuitFile}4.tac
+if [ $? != 0 ]; then 
+{ 
+  exit 1 
+} fi
+
+$PRINT_TIME
+
+$TIMER "metric_compile_untac4_utime $classname %U\nmetric_compile_untac4_stime $classname %S\n" perl -e 'print reverse <>' < "${circuitFile}4.tac.profile" > "${circuitFile}4.profile"
+
+$PRINT_TIME
+#Run the compiler
+$TIMER "metric_compile_4_utime $classname %U\nmetric_compile_4_stime $classname %S\n" java "$javaargs" -cp frontend/bin zcc.ZCC --profile ${circuitFile}4.profile ${circuitFile}4 $compileropts cfwa "$path"
+if [ $? != 0 ]; then 
+{ 
+  exit 1 
+} fi
+
+$PRINT_TIME
+
+#Number of wires in resultant circuit
+echo -en "metric_compile_4_wires $classname "
+grep -cve '^\s*$' "${circuitFile}"
+
+} fi
+
+} else
+{ # No optimize
+
+#Just run a single pass to produce an unoptimized spec file
+java "$javaargs" -cp frontend/bin zcc.ZCC $compileropts ct${inlining}w "$path"
+if [ $? != 0 ]; then 
+{ 
+  exit 1 
+} fi
+
+#One additional pass without optimization to remove fractions and output .spec files, plus a second pass of dead code elimination
+mv -f "$circuitFile" "${circuitFile}4"
+#Perform profiling on the circuit
+tac "${circuitFile}4" > "${circuitFile}4.tac"
+java "$javaargs" -cp frontend/bin zcc.ZCC $compileropts p ${circuitFile}4.tac
+tac "${circuitFile}4.tac.profile" > "${circuitFile}4.profile"
+#Run the compiler
+java "$javaargs" -cp frontend/bin zcc.ZCC --profile ${circuitFile}4.profile ${circuitFile}4 $compileropts cfwa "$path"
+if [ $? != 0 ]; then 
+{ 
+  exit 1 
+} fi
+
+} fi
+
+#spec file produced
+specfile="$filename.$framework.spec"
+
+#No compilation needed with python code (purely interpreted)
+cd backend
+specfile="../$specfile"
+
+#if [ "$verbose" == "1" ]; then
+#  echo "Running python backend"
+#fi
+
+$TIMER "metric_compile_backend_utime $classname %U\nmetric_compile_backend_stime $classname %S\n"  python zcc_backend.py -c "$classname" -s "$specfile" -d "../$targetdir" -o "$prefix" -b "$bugginess" -t "$framework" -m "$metrics" -w "$worksheetMode"
+
+if [ $? != 0 ]; then
+{
+  exit 1
+} fi
+
+$PRINT_TIME
+
+#Move .spec file to generated directory
+mv -f $specfile "../$targetdir/$prefix.$framework.spec"

@@ -1,0 +1,10 @@
+frontend/gensrc/*
+frontend/temp/*
+*.c
+*.defines
+tmptime
+*tmp*
+*.circuit*
+*.spec
+*.cons
+frontend/bin/*

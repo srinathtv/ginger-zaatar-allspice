@@ -1,0 +1,23 @@
+#
+# Makefile fragment for common code.
+# This is NOT a complete makefile;
+# you must run GNU make in the top-level directory
+# where the GNUmakefile is located.
+#
+
+OBJDIRS += common 
+SRCDIR = . 
+
+COMMON_SRCFILES :=          \
+    common/utility.cpp      \
+    common/measurement.cpp  \
+    common/curl_util.cpp    \
+    common/constraint_gen.cpp \
+    common/constraint_term.cpp \
+    common/mpnvector.cpp    \
+    common/mpnops.cpp    \
+
+# Only build files if they exist.
+COMMON_SRCFILES := $(wildcard $(COMMON_SRCFILES))
+
+COMMON_OBJFILES := $(patsubst %.cpp, $(OBJDIR)/%.o, $(COMMON_SRCFILES))

@@ -1,0 +1,78 @@
+This source code is released under a BSD-style license. See LICENSE
+for more details.
+
+
+I. Installation
+  
+  Our code can either use Open MPI or HTTP for communication between the
+  client and server; in our experiments, we used Open MPI. The following
+  are the dependent packages, if installing in the Open MPI mode:
+
+  1. gmp with C++ extensions enabled
+  2. PAPI
+  3. Chacha pseudorandom number generator (use the assembly for high
+  performance)
+  4. NTL with NTL_GMP_LIP=on 
+  5. libconfig
+  6. Cheetah template library
+  7. OpenMPI
+  8. CUDA packages (if USE_GPU is set to 1 in GNUMakefile)
+  9. GMPMEE 
+
+II. Configuration
+
+  - GPU usage is disabled by default; to enable check the USE_GPU flag
+    in code/pepper/flags.
+   
+  - By default, our build system selects the Zaatar protocol (see below
+    for automatically selecting a different protocol); however, to
+    manually select another protocol, modify the variable FRAMEWORK in
+    code/pepper/flags (e.g. "FRAMEWORK=GINGER").
+
+III. Running examples
+  
+  (1) With a single machine, for testing purposes
+
+  Suppose the computation is apps_sfdl/mm_sfdl.sfdl, then do the
+  following.
+
+    Specify input sizes in apps_sfdl/mm_sfdl.sfdl
+
+    Run "make SFDL_FILES=mm_sfdl"
+    
+    [If the computation is expressed in C, then supply the computation
+    to compile via "C_FILES=<file_name>"]
+
+    #Note - The first time a new computation is being compiled, the above command will
+    #fail with "No target to compile ... _p_exo.o". In this case, re-run
+    #the above command and it should work.
+    
+    To test the Ginger/Zaatar protocol, run "./run/mm_sfdl.sh"
+
+      To run a computation using the CMT-batching protocol, build it
+      with FRAMEWORK=ZAATAR, but then run with
+      ./bin/cmtgkr/apps/pws_cmtgkr bin/[computation_name.pws]
+      [batch-size] [num of bits in input's numerator] [num of bits in
+      input's denominator]
+  
+  (2) With a cluster, for experiments.
+
+    We run our experiments using the longhorn cluster where the client
+    and the server run on different machines and the server can have
+    access to multiple cores/machines. Our papers at Usenix Security
+    2012, EuroSys 2013, and S&P (Oakland) 2013 contain details of the
+    experimental configuration.
+
+    Please refer to
+    http://www.tacc.utexas.edu/user-services/user-guides/longhorn-user-guide
+    for launching a job on TACC. To get started, we are releasing the
+    scripts that we used to launch our experiments on TACC; they are
+    under the "scripts" folder (scripts/run_zaatar_jobs.py and
+    scripts/run_allspice_jobs.py), and the script
+    scripts/allspice_beta.py allows one to select a protocol (among
+    {Ginger, Zaatar, and CMT-batching}) with the lowest break-even batch
+    sizes.
+
+III. Contact
+Please contact srinath at cs dot utexas dot edu for any questions and
+comments.

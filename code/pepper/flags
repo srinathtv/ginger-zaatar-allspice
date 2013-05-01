@@ -1,0 +1,29 @@
+# This file lists the flags which are passed to the C++ code
+
+#Uncomment if this system does not have cuda / nvcc installed
+USE_GPU = 0 
+
+#An option to constrain the maximum number of provers
+NUM_PROVERS_MAX := 60
+
+#Determines how buggy the prover is. Set nonzero to test cases where the
+# prover deliberately skips computing parts of its proof vector
+BUGGINESS = 0
+
+#Determines which framework to output to, when compiling from sfdl -> cpp
+FRAMEWORK = ZAATAR
+
+#Comment out to turn off metrics output during compilation
+BENCHMARK_COMPILER := 1
+
+#Commented out => use dynamic prover execution (avoids long GCC compile times)
+#STATIC_COMPILED_PROVER := 1
+
+#A good default value
+COMPILER_WINDOW_SIZE = 10240
+
+#Uncomment to compile using the "naive fairplay" implementation
+#NAIVE_FAIRPLAY := 1
+
+#Comment out to skip the elimination of common subexpressions (Performing ECS uses lots of memory)
+#ELIMINATE_COMMON_SUBEXPRS := 1

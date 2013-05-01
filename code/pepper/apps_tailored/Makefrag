@@ -1,0 +1,45 @@
+#
+# Makefile fragment for common code.
+# This is NOT a complete makefile;
+# you must run GNU make in the top-level directory
+# where the GNUmakefile is located.
+#
+
+SRCDIR = apps_tailored
+OBJDIRS += $(SRCDIR)
+
+# Add computations here. Must name verifier <computation>_v and prover
+# <computation>_p, and, optionally, <computation>_proof
+COMPUTATION_APPS = \
+  matrix_cubicp \
+  polyeval_d3 \
+  hdist \
+  matrix_cubicp_q
+
+# General apps without automatic verifier/prover. Also builds an unified
+# binary for apps
+GENERAL_APPS = \
+  matrix_cubicp \
+  polyeval_d3 \
+  hdist \
+  matrix_cubicp_q \
+  micro2
+
+# Add SRCDIR
+APPS_V_SRCFILES = $(addprefix $(SRCDIR), $(COMPUTATION_APPS))
+APPS_P_SRCFILES = $(addprefix  $(SRCDIR), $(COMPUTATION_APPS))
+APPS_GENERAL_SRCFILES = $(addprefix $(SRCDIR), $(GENERAL_APPS))
+
+APPS_SRCFILES =                                                  \
+	$(patsubst %, $(SRCDIR)/%_v.cpp, $(COMPUTATION_APPS))    \
+	$(patsubst %, $(SRCDIR)/%_p.cpp, $(COMPUTATION_APPS))    \
+	$(patsubst %, $(SRCDIR)/%_proof.cpp, $(COMPUTATION_APPS))    \
+
+EXEC_SRCFILES =                                                  \
+	$(patsubst %, $(SRCDIR)/%.cpp, $(GENERAL_APPS))          \
+
+# Only build files if they exist.
+APPS_SRCFILES := $(wildcard $(APPS_SRCFILES))
+APPS_OBJFILES = $(patsubst %.cpp, $(OBJDIR)/%.o, $(APPS_SRCFILES))
+
+EXEC_SRCFILES := $(wildcard $(EXEC_SRCFILES))

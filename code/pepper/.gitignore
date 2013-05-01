@@ -1,0 +1,10 @@
+*.orig
+bin/*
+obj/*
+apps_sfdl_gen/*
+computation_state/*
+cmt_gkr_dat/*
+*.swo
+.cproject
+.project
+.settings/
